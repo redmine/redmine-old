@@ -13,7 +13,7 @@ api.user do
     @memberships.each do |membership|
       api.membership do
         api.id membership.id
-        api.project :id => membership.project.id, :name => membership.project.name
+        api.project :id => membership.project.id, :name => membership.project.name, :identifier => membership.project.identifier
         api.array :roles do
           membership.member_roles.each do |member_role|
             if member_role.role
