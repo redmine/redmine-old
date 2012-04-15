@@ -314,9 +314,9 @@ class MailHandler < ActionMailer::Base
       'start_date' => get_keyword(:start_date, :override => true, :format => '\d{4}-\d{2}-\d{2}'),
       'due_date' => get_keyword(:due_date, :override => true, :format => '\d{4}-\d{2}-\d{2}'),
       'estimated_hours' => get_keyword(:estimated_hours, :override => true),
-      'done_ratio' => get_keyword(:done_ratio, :override => true, :format => '(\d|10)?0')
+      'done_ratio' => get_keyword(:done_ratio, :override => true, :format => '(\d|10)?0'),
+			'is_private' => (k = get_keyword(:private, :override => true, :format => '([0,1])'))
     }.delete_if {|k, v| v.blank? }
-
     if issue.new_record? && attrs['tracker_id'].nil?
       attrs['tracker_id'] = issue.project.trackers.find(:first).try(:id)
     end
