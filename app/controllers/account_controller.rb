@@ -25,7 +25,11 @@ class AccountController < ApplicationController
   # Login request and validation
   def login
     if request.get?
-      logout_user
+      if User.current.logged? and params.include? "back_url"
+        redirect_to back_url
+      else
+        logout_user
+      end
     else
       authenticate_user
     end
