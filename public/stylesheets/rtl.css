@@ -1,0 +1,94 @@
+body, #wrapper { direction: rtl;}
+
+#quick-search { float: left; }
+#main-menu { margin-left: -500px; left: auto; right: 6px; margin-right: 0px;}
+#main-menu li { float: right; }
+#top-menu ul { float: right; }
+#account { float: left; }
+#top-menu #loggedas { float: left; }
+#top-menu li { float: right; }
+.tabular label.floating
+{
+    margin-right: 0;
+    margin-left: auto;
+    text-align: right;
+}
+.tabular label
+{
+    float: right;
+    margin-left: auto;
+}
+.tabular p
+{
+    clear: right;
+}
+.tabular label.block { text-align: right; }
+.icon
+{
+       background-position: 100% 40%;
+       padding-right: 20px;
+       padding-left: 0px;
+}
+div#activity dt, #search-results dt
+{
+    background-position: 100% 50%;
+    padding-right: 20px;
+    padding-left: 0px;
+}
+#content .tabs ul li { float: right; }
+#content .tabs ul { padding-left: auto; padding-right: 1em; }
+table.progress { float: right; }
+.contextual { float: left; }
+.icon22 { background-position: 100% 40%; padding-right: 26px; padding-left: auto; }
+h3, .wiki h2 { padding: 10px 2px 1px 0; }
+.tooltip span.tip { text-align: right; }
+tr.issue td.subject { text-align: right; }
+tr.time-entry td.subject, tr.time-entry td.comments { text-align: right; }
+#sidebar { float: left; }
+#main.nosidebar #content { border-width: 1px; border-style: solid; border-color: #D7D7D7 #BBBBBB #BBBBBB #D7D7D7;}
+.tabular.settings label { margin-left: auto; }
+.splitcontentleft { float: right; }
+.splitcontentright { float: left; }
+p.progress-info { clear: right; }
+table.list td.buttons a { padding-right: 20px; }
+.filecontent { direction: ltr; }
+.entries { direction: ltr; }
+.changeset-changes { direction: ltr; padding-left: 2em }
+.changesets { direction: ltr; }
+div#issue-changesets { float: left; margin-right: 1em; margin-left: 0 }
+div#issue-changesets div.wiki { direction: ltr; padding-left: 2em }
+#activity dt, .journal { clear: right; }
+.journal-link { float: left; }
+div.wiki pre { direction: ltr; }
+
+ul.projects { padding-right: 1em; padding-left: 0; }
+ul.projects ul.projects { border-right: 3px solid #e0e0e0; border-left: 0; }
+.my-project { padding-right: 18px; padding-left: 0; background-position: 100% 50%; }
+
+#admin-menu a { background-position: 100% 40%; padding-right: 20px; padding-left: 0;}
+input#openid_url { background-position: 100% 50%; padding-right: 18px; padding-left: 0; }
+
+tr.project.idnt td.name span { background: url(../images/bullet_arrow_left.png) no-repeat 100% 50%; padding-right: 16px; padding-left: 0; }
+tr.project.idnt-1 td.name { padding-right: 0.5em; }
+tr.project.idnt-2 td.name { padding-right: 2em; }
+tr.project.idnt-3 td.name { padding-right: 3.5em; }
+tr.project.idnt-4 td.name { padding-right: 5em; }
+tr.project.idnt-5 td.name { padding-right: 6.5em; }
+tr.project.idnt-6 td.name { padding-right: 8em; }
+tr.project.idnt-7 td.name { padding-right: 9.5em; }
+tr.project.idnt-8 td.name { padding-right: 11em; }
+tr.project.idnt-9 td.name { padding-right: 12.5em; }
+
+tr.issue.idnt td.subject a { background: url(../images/bullet_arrow_left.png) no-repeat 100% 50%; padding-right: 16px; padding-left: 0; }
+tr.issue.idnt-1 td.subject { padding-right: 0.5em; }
+tr.issue.idnt-2 td.subject { padding-right: 2em; }
+tr.issue.idnt-3 td.subject { padding-right: 3.5em; }
+tr.issue.idnt-4 td.subject { padding-right: 5em; }
+tr.issue.idnt-5 td.subject { padding-right: 6.5em; }
+tr.issue.idnt-6 td.subject { padding-right: 8em; }
+tr.issue.idnt-7 td.subject { padding-right: 9.5em; }
+tr.issue.idnt-8 td.subject { padding-right: 11em; }
+tr.issue.idnt-9 td.subject { padding-right: 12.5em; }
+
+div.wiki ul.toc { margin-right: 0; margin-left: 12px; }
+div.wiki ul.toc li li { margin-right: 1.5em; margin-left: 0; }

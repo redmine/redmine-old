@@ -1,0 +1,34 @@
+<div class="contextual">
+<%= link_to l(:label_role_new), new_role_path, :class => 'icon icon-add' %>
+<%= link_to l(:label_permissions_report), {:action => 'permissions'}, :class => 'icon icon-summary' %>
+</div>
+
+<h2><%=l(:label_role_plural)%></h2>
+
+<table class="list">
+  <thead><tr>
+    <th><%=l(:label_role)%></th>
+    <th><%=l(:button_sort)%></th>
+  <th></th>
+  </tr></thead>
+  <tbody>
+<% for role in @roles %>
+  <tr class="<%= cycle("odd", "even") %>">
+  <td><%= content_tag(role.builtin? ? 'em' : 'span', link_to(h(role.name), edit_role_path(role))) %></td>
+  <td align="center" style="width:15%;">
+  <% unless role.builtin? %>
+    <%= reorder_links('role', {:action => 'update', :id => role}, :put) %>
+  <% end %>
+  </td>
+  <td class="buttons">
+    <%= link_to l(:button_copy), new_role_path(:copy => role), :class => 'icon icon-copy' %>
+    <%= delete_link role_path(role) unless role.builtin? %>
+  </td>
+  </tr>
+<% end %>
+  </tbody>
+</table>
+
+<p class="pagination"><%= pagination_links_full @role_pages %></p>
+
+<% html_title(l(:label_role_plural)) -%>

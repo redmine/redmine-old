@@ -1,0 +1,12 @@
+<h2><%=l(:label_news)%></h2>
+
+<%= labelled_form_for @news, :html => { :id => 'news-form', :multipart => true, :method => :put } do |f| %>
+<%= render :partial => 'form', :locals => { :f => f } %>
+<%= submit_tag l(:button_save) %>
+<%= preview_link preview_news_path(:project_id => @project), 'news-form' %>
+<% end %>
+<div id="preview" class="wiki"></div>
+
+<% content_for :header_tags do %>
+  <%= stylesheet_link_tag 'scm' %>
+<% end %>

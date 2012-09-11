@@ -1,0 +1,19 @@
+<h2><%=l(:label_information_plural)%></h2>
+
+<p><strong><%= Redmine::Info.versioned_name %></strong></p>
+
+<table class="list">
+<% @checklist.each do |label, result| %>
+  <tr class="<%= cycle 'odd', 'even' %>">
+    <td><%= l(label) %></td>
+    <td width="30px"><%= image_tag((result ? 'true.png' : 'exclamation.png'),
+                                    :style => "vertical-align:bottom;") %></td>
+  </tr>
+<% end %>
+</table>
+<br />
+<div class="box">
+<pre><%= Redmine::Info.environment %></pre>
+</div>
+
+<% html_title(l(:label_information_plural)) -%>

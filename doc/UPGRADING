@@ -1,0 +1,69 @@
+== Redmine upgrade
+
+Redmine - project management software
+Copyright (C) 2006-2012  Jean-Philippe Lang
+http://www.redmine.org/
+
+
+== Upgrading
+
+1. Uncompress the program archive in a new directory
+
+2. Copy your database settings (RAILS_ROOT/config/database.yml)
+   and your configuration file (RAILS_ROOT/config/configuration.yml)
+   into the new config directory
+   Note: before Redmine 1.2, SMTP configuration was stored in
+   config/email.yml. It should now be stored in config/configuration.yml. 
+
+3. Copy the RAILS_ROOT/files directory content into your new installation
+   This directory contains all the attached files.
+
+4. Copy the folders of the installed plugins and themes into new installation
+   Plugins must be stored in the [redmine_root]/plugins directory
+   Themes must be stored in the [redmine_root]/public/themes directory
+
+   WARNING: plugins from your previous Redmine version may not be compatible
+   with the Redmine version you're upgrading to.
+
+5. Install the required gems by running:
+     bundle install --without development test
+
+   If ImageMagick is not installed on your system, you should skip the installation
+   of the rmagick gem using:
+     bundle install --without development test rmagick
+
+6. Generate a session store secret
+   
+   Redmine stores session data in cookies by default, which requires
+   a secret to be generated. Under the new application directory run:
+     rake generate_secret_token
+   
+   DO NOT REPLACE OR EDIT ANY OTHER FILES.
+
+7. Migrate your database
+
+   If you are upgrading to Rails 2.3.14 as part of this migration, you
+   need to upgrade the plugin migrations before running the plugin migrations
+   using:
+     rake db:migrate:upgrade_plugin_migrations RAILS_ENV="production"
+   
+   Please make a backup before doing this! Under the new application
+   directory run:
+     rake db:migrate RAILS_ENV="production"
+   
+   If you have installed any plugins, you should also run their database
+   migrations using:
+     rake db:migrate_plugins RAILS_ENV="production"
+   
+8. Clear the cache and the existing sessions by running:
+     rake tmp:cache:clear
+     rake tmp:sessions:clear
+
+9. Restart the application server (e.g. mongrel, thin, passenger)
+
+10. Finally go to "Administration -> Roles & permissions" to check/set permissions
+    for new features, if any
+
+== References
+
+* http://www.redmine.org/wiki/redmine/RedmineUpgrade
