@@ -1,0 +1,34 @@
+<div class="contextual">
+<%= link_to l(:label_document_new), new_project_document_path(@project), :class => 'icon icon-add',
+      :onclick => 'showAndScrollTo("add-document", "document_title"); return false;' if User.current.allowed_to?(:manage_documents, @project) %>
+</div>
+
+<div id="add-document" style="display:none;">
+<h2><%=l(:label_document_new)%></h2>
+<%= labelled_form_for @document, :url => project_documents_path(@project), :html => {:multipart => true} do |f| %>
+<%= render :partial => 'form', :locals => {:f => f} %>
+<p>
+	<%= submit_tag l(:button_create) %>
+  <%= link_to l(:button_cancel), "#", :onclick => '$("#add-document").hide(); return false;' %>
+</p>
+<% end %>
+</div>
+
+<h2><%=l(:label_document_plural)%></h2>
+
+<% if @grouped.empty? %><p class="nodata"><%= l(:label_no_data) %></p><% end %>
+
+<% @grouped.keys.sort.each do |group| %>
+    <h3><%= group %></h3>
+    <%= render :partial => 'documents/document', :collection => @grouped[group] %>
+<% end %>
+
+<% content_for :sidebar do %>
+  <h3><%= l(:label_sort_by, '') %></h3>
+  <%= link_to l(:field_category), {:sort_by => 'category'}, :class => (@sort_by == 'category' ? 'selected' :nil) %><br />
+  <%= link_to l(:label_date), {:sort_by => 'date'}, :class => (@sort_by == 'date' ? 'selected' :nil) %><br />
+  <%= link_to l(:field_title), {:sort_by => 'title'}, :class => (@sort_by == 'title' ? 'selected' :nil) %><br />
+  <%= link_to l(:field_author), {:sort_by => 'author'}, :class => (@sort_by == 'author' ? 'selected' :nil) %>
+<% end %>
+
+<% html_title(l(:label_document_plural)) -%>

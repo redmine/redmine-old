@@ -1,0 +1,18 @@
+<%= form_tag({:controller => 'journals', :action => 'edit', :id => @journal},
+             :remote => true,
+             :id => "journal-#{@journal.id}-form") do %>
+    <%= label_tag "notes", l(:description_notes), :class => "hidden-for-sighted" %>
+    <%= text_area_tag :notes, @journal.notes,
+          :id => "journal_#{@journal.id}_notes",
+          :class => 'wiki-edit',
+          :rows => (@journal.notes.blank? ? 10 : [[10, @journal.notes.length / 50].max, 100].min) %>
+    <%= call_hook(:view_journals_notes_form_after_notes, { :journal => @journal}) %>
+    <p><%= submit_tag l(:button_save) %>
+    <%= preview_link preview_edit_issue_path(:project_id => @project, :id => @journal.issue), 
+                     "journal-#{@journal.id}-form",
+                     "journal_#{@journal.id}_preview" %> |
+    <%= link_to l(:button_cancel), '#', :onclick => "$('#journal-#{@journal.id}-form').remove(); $('#journal-#{@journal.id}-notes').show(); return false;" %></p>
+
+    <div id="journal_<%= @journal.id %>_preview" class="wiki"></div>
+<% end %>
+<%= wikitoolbar_for "journal_#{@journal.id}_notes" %>

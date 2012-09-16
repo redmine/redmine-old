@@ -1,0 +1,18 @@
+<%= javascript_tag do %>
+function revisionGraphHandler(){
+  drawRevisionGraph(
+    document.getElementById('holder'),
+    <%= commits.to_json.html_safe %>,
+    <%= space %>
+  );
+}
+$(document).ready(revisionGraphHandler);
+$(window).resize(revisionGraphHandler);
+<% end %>
+
+<div id="holder" class="revision-graph"></div>
+
+<% content_for :header_tags do %>
+  <%= javascript_include_tag 'raphael' %>
+  <%= javascript_include_tag 'revision_graph' %>
+<% end %>
