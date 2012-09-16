@@ -95,7 +95,7 @@ class ApplicationController < ActionController::Base
         user = (User.active.find(session[:user_id]) rescue nil)
       elsif autologin_user = try_to_autologin
         user = autologin_user
-      elsif params[:format] == 'atom' && params[:key] && request.get? && accept_rss_auth?
+      elsif request.format == 'atom' && params[:key] && request.get? && accept_rss_auth?
         # RSS key authentication does not start a session
         user = User.find_by_rss_key(params[:key])
       end
@@ -496,7 +496,7 @@ class ApplicationController < ActionController::Base
   end
 
   def api_request?
-    %w(xml json).include? params[:format]
+    %w(xml json).include? request.format
   end
 
   # Returns the API key present in the request
