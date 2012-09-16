@@ -1,3 +1,6 @@
 #!/usr/bin/env ruby
-require File.dirname(__FILE__) + '/../config/boot'
-require 'commands/about'
+
+ENV["RAILS_ENV"] ||= "production"
+require File.expand_path(File.dirname(__FILE__) + "/../config/environment")
+puts
+puts Redmine::Info.environment

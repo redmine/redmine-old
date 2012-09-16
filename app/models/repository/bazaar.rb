@@ -1,16 +1,16 @@
-# redMine - project management software
-# Copyright (C) 2006-2007  Jean-Philippe Lang
+# Redmine - project management software
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -19,16 +19,24 @@ require 'redmine/scm/adapters/bazaar_adapter'
 
 class Repository::Bazaar < Repository
   attr_protected :root_url
-  validates_presence_of :url
+  validates_presence_of :url, :log_encoding
 
-  def scm_adapter
+  def self.human_attribute_name(attribute_key_name, *args)
+    attr_name = attribute_key_name.to_s
+    if attr_name == "url"
+      attr_name = "path_to_repository"
+    end
+    super(attr_name, *args)
+  end
+
+  def self.scm_adapter_class
     Redmine::Scm::Adapters::BazaarAdapter
   end
-  
+
   def self.scm_name
     'Bazaar'
   end
-  
+
   def entries(path=nil, identifier=nil)
     entries = scm.entries(path, identifier)
     if entries
@@ -39,19 +47,24 @@ class Repository::Bazaar < Repository
           full_path = File.join(root_url, e.path)
           e.size = File.stat(full_path).size if File.file?(full_path)
         end
-        c = Change.find(:first,
-                        :include => :changeset,
-                        :conditions => ["#{Change.table_name}.revision = ? and #{Changeset.table_name}.repository_id = ?", e.lastrev.revision, id],
-                        :order => "#{Changeset.table_name}.revision DESC")
+        c = Change.find(
+               :first,
+               :include    => :changeset,
+               :conditions => [
+                   "#{Change.table_name}.revision = ? and #{Changeset.table_name}.repository_id = ?",
+                   e.lastrev.revision,
+                   id
+                   ],
+               :order => "#{Changeset.table_name}.revision DESC")
         if c
           e.lastrev.identifier = c.changeset.revision
-          e.lastrev.name = c.changeset.revision
-          e.lastrev.author = c.changeset.committer
+          e.lastrev.name       = c.changeset.revision
+          e.lastrev.author     = c.changeset.committer
         end
       end
     end
   end
-  
+
   def fetch_changesets
     scm_info = scm.info
     if scm_info
@@ -68,18 +81,18 @@ class Repository::Bazaar < Repository
           revisions = scm.revisions('', identifier_to, identifier_from, :with_paths => true)
           transaction do
             revisions.reverse_each do |revision|
-              changeset = Changeset.create(:repository => self,
-                                           :revision => revision.identifier, 
-                                           :committer => revision.author, 
+              changeset = Changeset.create(:repository   => self,
+                                           :revision     => revision.identifier,
+                                           :committer    => revision.author,
                                            :committed_on => revision.time,
-                                           :scmid => revision.scmid,
-                                           :comments => revision.message)
-              
+                                           :scmid        => revision.scmid,
+                                           :comments     => revision.message)
+
               revision.paths.each do |change|
                 Change.create(:changeset => changeset,
-                              :action => change[:action],
-                              :path => change[:path],
-                              :revision => change[:revision])
+                              :action    => change[:action],
+                              :path      => change[:path],
+                              :revision  => change[:revision])
               end
             end
           end unless revisions.nil?

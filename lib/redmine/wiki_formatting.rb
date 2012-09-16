@@ -1,184 +1,171 @@
-# redMine - project management software
-# Copyright (C) 2006-2007  Jean-Philippe Lang
+# Redmine - project management software
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-require 'redcloth'
-require 'coderay'
-
 module Redmine
   module WikiFormatting
-  
-  private
-  
-    class TextileFormatter < RedCloth
-      
-      # auto_link rule after textile rules so that it doesn't break !image_url! tags
-      RULES = [:textile, :block_markdown_rule, :inline_auto_link, :inline_auto_mailto, :inline_toc, :inline_macros]
-      
-      def initialize(*args)
-        super
-        self.hard_breaks=true
-        self.no_span_caps=true
-      end
-      
-      def to_html(*rules, &block)
-        @toc = []
-        @macros_runner = block
-        super(*RULES).to_s
+    class StaleSectionError < Exception; end
+
+    @@formatters = {}
+
+    class << self
+      def map
+        yield self
       end
 
-    private
-
-      # Patch for RedCloth.  Fixed in RedCloth r128 but _why hasn't released it yet.
-      # <a href="http://code.whytheluckystiff.net/redcloth/changeset/128">http://code.whytheluckystiff.net/redcloth/changeset/128</a>
-      def hard_break( text ) 
-        text.gsub!( /(.)\n(?!\n|\Z|>| *(>? *[#*=]+(\s|$)|[{|]))/, "\\1<br />\n" ) if hard_breaks 
-      end
-      
-      # Patch to add code highlighting support to RedCloth
-      def smooth_offtags( text )
-        unless @pre_list.empty?
-          ## replace <pre> content
-          text.gsub!(/<redpre#(\d+)>/) do
-            content = @pre_list[$1.to_i]
-            if content.match(/<code\s+class="(\w+)">\s?(.+)/m)
-              content = "<code class=\"#{$1} CodeRay\">" + 
-                CodeRay.scan($2, $1.downcase).html(:escape => false, :line_numbers => :inline)
-            end
-            content
-          end
-        end
-      end
-      
-      # Patch to add 'table of content' support to RedCloth
-      def textile_p_withtoc(tag, atts, cite, content)
-        # removes wiki links from the item
-        toc_item = content.gsub(/(\[\[|\]\])/, '')
-        # removes styles
-        # eg. %{color:red}Triggers% => Triggers
-        toc_item.gsub! %r[%\{[^\}]*\}([^%]+)%], '\\1'
-        
-        # replaces non word caracters by dashes
-        anchor = toc_item.gsub(%r{[^\w\s\-]}, '').gsub(%r{\s+(\-+\s*)?}, '-')
-
-        unless anchor.blank?
-          if tag =~ /^h(\d)$/
-            @toc << [$1.to_i, anchor, toc_item]
-          end
-          atts << " id=\"#{anchor}\""
-          content = content + "<a href=\"##{anchor}\" class=\"wiki-anchor\">&para;</a>"
-        end
-        textile_p(tag, atts, cite, content)
+      def register(name, formatter, helper)
+        raise ArgumentError, "format name '#{name}' is already taken" if @@formatters[name.to_s]
+        @@formatters[name.to_s] = {:formatter => formatter, :helper => helper}
       end
 
-      alias :textile_h1 :textile_p_withtoc
-      alias :textile_h2 :textile_p_withtoc
-      alias :textile_h3 :textile_p_withtoc
-      
-      def inline_toc(text)
-        text.gsub!(/<p>\{\{([<>]?)toc\}\}<\/p>/i) do
-          div_class = 'toc'
-          div_class << ' right' if $1 == '>'
-          div_class << ' left' if $1 == '<'
-          out = "<ul class=\"#{div_class}\">"
-          @toc.each do |heading|
-            level, anchor, toc_item = heading
-            out << "<li class=\"heading#{level}\"><a href=\"##{anchor}\">#{toc_item}</a></li>\n"
-          end
-          out << '</ul>'
-          out
+      def formatter
+        formatter_for(Setting.text_formatting)
+      end
+
+      def formatter_for(name)
+        entry = @@formatters[name.to_s]
+        (entry && entry[:formatter]) || Redmine::WikiFormatting::NullFormatter::Formatter
+      end
+
+      def helper_for(name)
+        entry = @@formatters[name.to_s]
+        (entry && entry[:helper]) || Redmine::WikiFormatting::NullFormatter::Helper
+      end
+
+      def format_names
+        @@formatters.keys.map
+      end
+
+      def to_html(format, text, options = {})
+        text = if Setting.cache_formatted_text? && text.size > 2.kilobyte && cache_store && cache_key = cache_key_for(format, options[:object], options[:attribute])
+          # Text retrieved from the cache store may be frozen
+          # We need to dup it so we can do in-place substitutions with gsub!
+          cache_store.fetch cache_key do
+            formatter_for(format).new(text).to_html
+          end.dup
+        else
+          formatter_for(format).new(text).to_html
+        end
+        text
+      end
+
+      # Returns true if the text formatter supports single section edit
+      def supports_section_edit?
+        (formatter.instance_methods & ['update_section', :update_section]).any?
+      end
+
+      # Returns a cache key for the given text +format+, +object+ and +attribute+ or nil if no caching should be done
+      def cache_key_for(format, object, attribute)
+        if object && attribute && !object.new_record? && object.respond_to?(:updated_on) && !format.blank?
+          "formatted_text/#{format}/#{object.class.model_name.cache_key}/#{object.id}-#{attribute}-#{object.updated_on.to_s(:number)}"
         end
       end
-      
-      MACROS_RE = /
-                    (!)?                        # escaping
-                    (
-                    \{\{                        # opening tag
-                    ([\w]+)                     # macro name
-                    (\(([^\}]*)\))?             # optional arguments
-                    \}\}                        # closing tag
-                    )
-                  /x unless const_defined?(:MACROS_RE)
-      
-      def inline_macros(text)
-        text.gsub!(MACROS_RE) do
-          esc, all, macro = $1, $2, $3.downcase
-          args = ($5 || '').split(',').each(&:strip)
-          if esc.nil?
-            begin
-              @macros_runner.call(macro, args)
-            rescue => e
-              "<div class=\"flash error\">Error executing the <strong>#{macro}</strong> macro (#{e})</div>"
-            end || all
-          else
-            all
-          end
-        end
+
+      # Returns the cache store used to cache HTML output
+      def cache_store
+        ActionController::Base.cache_store
       end
-      
+    end
+
+    module LinksHelper
       AUTO_LINK_RE = %r{
-                        (                          # leading text
-                          <\w+.*?>|                # leading HTML tag, or
-                          [^=<>!:'"/]|             # leading punctuation, or 
-                          ^                        # beginning of line
-                        )
-                        (
-                          (?:https?://)|           # protocol spec, or
-                          (?:ftp://)|
-                          (?:www\.)                # www.*
-                        )
-                        (
-                          (\S+?)                   # url
-                          (\/)?                    # slash
-                        )
-                        ([^\w\=\/;]*?)               # post
-                        (?=<|\s|$)
-                       }x unless const_defined?(:AUTO_LINK_RE)
+                      (                          # leading text
+                        <\w+.*?>|                # leading HTML tag, or
+                        [^=<>!:'"/]|             # leading punctuation, or
+                        ^                        # beginning of line
+                      )
+                      (
+                        (?:https?://)|           # protocol spec, or
+                        (?:s?ftps?://)|
+                        (?:www\.)                # www.*
+                      )
+                      (
+                        (\S+?)                   # url
+                        (\/)?                    # slash
+                      )
+                      ((?:&gt;)?|[^\w\=\/;\(\)]*?)               # post
+                      (?=<|\s|$)
+                     }x unless const_defined?(:AUTO_LINK_RE)
 
-      # Turns all urls into clickable links (code from Rails).
-      def inline_auto_link(text)
+      # Destructively remplaces urls into clickable links
+      def auto_link!(text)
         text.gsub!(AUTO_LINK_RE) do
           all, leading, proto, url, post = $&, $1, $2, $3, $6
           if leading =~ /<a\s/i || leading =~ /![<>=]?/
             # don't replace URL's that are already linked
             # and URL's prefixed with ! !> !< != (textile images)
             all
-          else            
-            %(#{leading}<a class="external" href="#{proto=="www."?"http://www.":proto}#{url}">#{proto + url}</a>#{post})
+          else
+            # Idea below : an URL with unbalanced parethesis and
+            # ending by ')' is put into external parenthesis
+            if ( url[-1]==?) and ((url.count("(") - url.count(")")) < 0 ) )
+              url=url[0..-2] # discard closing parenth from url
+              post = ")"+post # add closing parenth to post
+            end
+            content = proto + url
+            href = "#{proto=="www."?"http://www.":proto}#{url}"
+            %(#{leading}<a class="external" href="#{ERB::Util.html_escape href}">#{ERB::Util.html_escape content}</a>#{post}).html_safe
           end
         end
       end
 
-      # Turns all email addresses into clickable links (code from Rails).
-      def inline_auto_mailto(text)
+      # Destructively remplaces email addresses into clickable links
+      def auto_mailto!(text)
         text.gsub!(/([\w\.!#\$%\-+.]+@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)+)/) do
           mail = $1
           if text.match(/<a\b[^>]*>(.*)(#{Regexp.escape(mail)})(.*)<\/a>/)
             mail
           else
-            %{<a href="mailto:#{mail}" class="email">#{mail}</a>}
+            %(<a class="email" href="mailto:#{ERB::Util.html_escape mail}">#{ERB::Util.html_escape mail}</a>).html_safe
           end
         end
-      end
+      end      
     end
-    
-  public
-  
-    def self.to_html(text, options = {}, &block)
-      TextileFormatter.new(text).to_html(&block)
+
+    # Default formatter module
+    module NullFormatter
+      class Formatter
+        include ActionView::Helpers::TagHelper
+        include ActionView::Helpers::TextHelper
+        include ActionView::Helpers::UrlHelper
+        include Redmine::WikiFormatting::LinksHelper
+
+        def initialize(text)
+          @text = text
+        end
+
+        def to_html(*args)
+          t = CGI::escapeHTML(@text)
+          auto_link!(t)
+          auto_mailto!(t)
+          simple_format(t, {}, :sanitize => false)
+        end
+      end
+
+      module Helper
+        def wikitoolbar_for(field_id)
+        end
+
+        def heads_for_wiki_formatter
+        end
+
+        def initial_page_content(page)
+          page.pretty_title.to_s
+        end
+      end
     end
   end
 end

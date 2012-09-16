@@ -1,16 +1,18 @@
-# redMine - project management software
-# Copyright (C) 2006  Jean-Philippe Lang
+# encoding: utf-8
+#
+# Redmine - project management software
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -18,21 +20,9 @@
 module ProjectsHelper
   def link_to_version(version, options = {})
     return '' unless version && version.is_a?(Version)
-    link_to h(version.name), { :controller => 'versions', :action => 'show', :id => version }, options
+    link_to_if version.visible?, format_version_name(version), { :controller => 'versions', :action => 'show', :id => version }, options
   end
-  
-  def format_activity_title(text)
-    h(truncate_single_line(text, 100))
-  end
-  
-  def format_activity_day(date)
-    date == Date.today ? l(:label_today).titleize : format_date(date)
-  end
-  
-  def format_activity_description(text)
-    h(truncate(text.to_s, 250).gsub(%r{<(pre|code)>.*$}m, '...'))
-  end
-  
+
   def project_settings_tabs
     tabs = [{:name => 'info', :action => :edit_project, :partial => 'projects/edit', :label => :label_information_plural},
             {:name => 'modules', :action => :select_project_modules, :partial => 'projects/settings/modules', :label => :label_module_plural},
@@ -40,159 +30,81 @@ module ProjectsHelper
             {:name => 'versions', :action => :manage_versions, :partial => 'projects/settings/versions', :label => :label_version_plural},
             {:name => 'categories', :action => :manage_categories, :partial => 'projects/settings/issue_categories', :label => :label_issue_category_plural},
             {:name => 'wiki', :action => :manage_wiki, :partial => 'projects/settings/wiki', :label => :label_wiki},
-            {:name => 'repository', :action => :manage_repository, :partial => 'projects/settings/repository', :label => :label_repository},
-            {:name => 'boards', :action => :manage_boards, :partial => 'projects/settings/boards', :label => :label_board_plural}
+            {:name => 'repositories', :action => :manage_repository, :partial => 'projects/settings/repositories', :label => :label_repository_plural},
+            {:name => 'boards', :action => :manage_boards, :partial => 'projects/settings/boards', :label => :label_board_plural},
+            {:name => 'activities', :action => :manage_project_activities, :partial => 'projects/settings/activities', :label => :enumeration_activities}
             ]
-    tabs.select {|tab| User.current.allowed_to?(tab[:action], @project)}     
+    tabs.select {|tab| User.current.allowed_to?(tab[:action], @project)}
   end
-  
-  # Generates a gantt image
-  # Only defined if RMagick is avalaible
-  def gantt_image(events, date_from, months, zoom)
-    date_to = (date_from >> months)-1    
-    show_weeks = zoom > 1
-    show_days = zoom > 2
-    
-    subject_width = 320
-    header_heigth = 18
-    # width of one day in pixels
-    zoom = zoom*2
-    g_width = (date_to - date_from + 1)*zoom
-    g_height = 20 * events.length + 20
-    headers_heigth = (show_weeks ? 2*header_heigth : header_heigth)
-    height = g_height + headers_heigth
-        
-    imgl = Magick::ImageList.new
-    imgl.new_image(subject_width+g_width+1, height)
-    gc = Magick::Draw.new
-    
-    # Subjects
-    top = headers_heigth + 20
-    gc.fill('black')
-    gc.stroke('transparent')
-    gc.stroke_width(1)
-    events.each do |i|
-      gc.text(4, top + 2, (i.is_a?(Issue) ? i.subject : i.name))
-      top = top + 20
+
+  def parent_project_select_tag(project)
+    selected = project.parent
+    # retrieve the requested parent project
+    parent_id = (params[:project] && params[:project][:parent_id]) || params[:parent_id]
+    if parent_id
+      selected = (parent_id.blank? ? nil : Project.find(parent_id))
     end
 
-    # Months headers
-    month_f = date_from
-    left = subject_width
-    months.times do 
-      width = ((month_f >> 1) - month_f) * zoom
-      gc.fill('white')
-      gc.stroke('grey')
-      gc.stroke_width(1)
-      gc.rectangle(left, 0, left + width, height)
-      gc.fill('black')
-      gc.stroke('transparent')
-      gc.stroke_width(1)
-      gc.text(left.round + 8, 14, "#{month_f.year}-#{month_f.month}")
-      left = left + width
-      month_f = month_f >> 1
-    end
-    
-    # Weeks headers
-    if show_weeks
-    	left = subject_width
-    	height = header_heigth
-    	if date_from.cwday == 1
-    	    # date_from is monday
-            week_f = date_from
-    	else
-    	    # find next monday after date_from
-    		week_f = date_from + (7 - date_from.cwday + 1)
-    		width = (7 - date_from.cwday + 1) * zoom
-            gc.fill('white')
-            gc.stroke('grey')
-            gc.stroke_width(1)
-            gc.rectangle(left, header_heigth, left + width, 2*header_heigth + g_height-1)
-    		left = left + width
-    	end
-    	while week_f <= date_to
-    		width = (week_f + 6 <= date_to) ? 7 * zoom : (date_to - week_f + 1) * zoom
-            gc.fill('white')
-            gc.stroke('grey')
-            gc.stroke_width(1)
-            gc.rectangle(left.round, header_heigth, left.round + width, 2*header_heigth + g_height-1)
-            gc.fill('black')
-            gc.stroke('transparent')
-            gc.stroke_width(1)
-            gc.text(left.round + 2, header_heigth + 14, week_f.cweek.to_s)
-    		left = left + width
-    		week_f = week_f+7
-    	end
-    end
-    
-    # Days details (week-end in grey)
-    if show_days
-    	left = subject_width
-    	height = g_height + header_heigth - 1
-    	wday = date_from.cwday
-    	(date_to - date_from + 1).to_i.times do 
-          width =  zoom
-          gc.fill(wday == 6 || wday == 7 ? '#eee' : 'white')
-          gc.stroke('grey')
-          gc.stroke_width(1)
-          gc.rectangle(left, 2*header_heigth, left + width, 2*header_heigth + g_height-1)
-          left = left + width
-          wday = wday + 1
-          wday = 1 if wday > 7
-    	end
-    end
+    options = ''
+    options << "<option value=''></option>" if project.allowed_parents.include?(nil)
+    options << project_tree_options_for_select(project.allowed_parents.compact, :selected => selected)
+    content_tag('select', options.html_safe, :name => 'project[parent_id]', :id => 'project_parent_id')
+  end
 
-    # border
-    gc.fill('transparent')
-    gc.stroke('grey')
-    gc.stroke_width(1)
-    gc.rectangle(0, 0, subject_width+g_width, headers_heigth)
-    gc.stroke('black')
-    gc.rectangle(0, 0, subject_width+g_width, g_height+ headers_heigth-1)
-        
-    # content
-    top = headers_heigth + 20
-    gc.stroke('transparent')
-    events.each do |i|      
-      if i.is_a?(Issue)       
-        i_start_date = (i.start_date >= date_from ? i.start_date : date_from )
-        i_end_date = (i.due_date <= date_to ? i.due_date : date_to )        
-        i_done_date = i.start_date + ((i.due_date - i.start_date+1)*i.done_ratio/100).floor
-        i_done_date = (i_done_date <= date_from ? date_from : i_done_date )
-        i_done_date = (i_done_date >= date_to ? date_to : i_done_date )        
-        i_late_date = [i_end_date, Date.today].min if i_start_date < Date.today
-        
-        i_left = subject_width + ((i_start_date - date_from)*zoom).floor 	
-        i_width = ((i_end_date - i_start_date + 1)*zoom).floor                  # total width of the issue
-        d_width = ((i_done_date - i_start_date)*zoom).floor                     # done width
-        l_width = i_late_date ? ((i_late_date - i_start_date+1)*zoom).floor : 0 # delay width
-  
-        gc.fill('grey')
-        gc.rectangle(i_left, top, i_left + i_width, top - 6)
-        gc.fill('red')
-        gc.rectangle(i_left, top, i_left + l_width, top - 6) if l_width > 0
-        gc.fill('blue')
-        gc.rectangle(i_left, top, i_left + d_width, top - 6) if d_width > 0
-        gc.fill('black')
-        gc.text(i_left + i_width + 5,top + 1, "#{i.status.name} #{i.done_ratio}%")
-      else
-        i_left = subject_width + ((i.start_date - date_from)*zoom).floor
-        gc.fill('green')
-        gc.rectangle(i_left, top, i_left + 6, top - 6)        
-        gc.fill('black')
-        gc.text(i_left + 11, top + 1, i.name)
+  # Renders a tree of projects as a nested set of unordered lists
+  # The given collection may be a subset of the whole project tree
+  # (eg. some intermediate nodes are private and can not be seen)
+  def render_project_hierarchy(projects)
+    s = ''
+    if projects.any?
+      ancestors = []
+      original_project = @project
+      projects.each do |project|
+        # set the project environment to please macros.
+        @project = project
+        if (ancestors.empty? || project.is_descendant_of?(ancestors.last))
+          s << "<ul class='projects #{ ancestors.empty? ? 'root' : nil}'>\n"
+        else
+          ancestors.pop
+          s << "</li>"
+          while (ancestors.any? && !project.is_descendant_of?(ancestors.last))
+            ancestors.pop
+            s << "</ul></li>\n"
+          end
+        end
+        classes = (ancestors.empty? ? 'root' : 'child')
+        s << "<li class='#{classes}'><div class='#{classes}'>" +
+               link_to_project(project, {}, :class => "project #{User.current.member_of?(project) ? 'my-project' : nil}")
+        s << "<div class='wiki description'>#{textilizable(project.short_description, :project => project)}</div>" unless project.description.blank?
+        s << "</div>\n"
+        ancestors << project
       end
-      top = top + 20
+      s << ("</li></ul>\n" * ancestors.size)
+      @project = original_project
     end
-    
-    # today red line
-    if Date.today >= date_from and Date.today <= date_to
-      gc.stroke('red')
-      x = (Date.today-date_from+1)*zoom + subject_width
-      gc.line(x, headers_heigth, x, headers_heigth + g_height-1)      
-    end    
-    
-    gc.draw(imgl)
-    imgl
-  end if Object.const_defined?(:Magick)
+    s.html_safe
+  end
+
+  # Returns a set of options for a select field, grouped by project.
+  def version_options_for_select(versions, selected=nil)
+    grouped = Hash.new {|h,k| h[k] = []}
+    versions.each do |version|
+      grouped[version.project.name] << [version.name, version.id]
+    end
+    # Add in the selected
+    if selected && !versions.include?(selected)
+      grouped[selected.project.name] << [selected.name, selected.id]
+    end
+
+    if grouped.keys.size > 1
+      grouped_options_for_select(grouped, selected && selected.id)
+    else
+      options_for_select((grouped.values.first || []), selected && selected.id)
+    end
+  end
+
+  def format_version_sharing(sharing)
+    sharing = 'none' unless Version::VERSION_SHARINGS.include?(sharing)
+    l("label_version_sharing_#{sharing}")
+  end
 end

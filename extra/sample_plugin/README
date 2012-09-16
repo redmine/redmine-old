@@ -4,18 +4,12 @@ This is a sample plugin for Redmine
 
 == Installation
 
-=== Adding plugin support to Redmine
+1. Copy the plugin directory into the "plugins" directory at the root
+   of your Redmine directory
 
-To add plugin support to Redmine, install engines plugin:
-   See: http://rails-engines.org/
-
-=== Plugin installation
-
-1. Copy the plugin directory into the vendor/plugins directory
-
-2. Migrate plugin:
-   rake db:migrate_plugins
+2. Migrate and copy plugin assets:
+   rake redmine:plugins
 
 3. Start Redmine
 
-Installed plugins are listed on 'Admin -> Information' screen.
+Installed plugins are listed and can be configured from 'Admin -> Plugins' screen.

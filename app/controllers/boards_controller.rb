@@ -1,30 +1,29 @@
-# redMine - project management software
-# Copyright (C) 2006-2007  Jean-Philippe Lang
+# Redmine - project management software
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 class BoardsController < ApplicationController
-  before_filter :find_project, :authorize
+  default_search_scope :messages
+  before_filter :find_project_by_project_id, :find_board_if_available, :authorize
+  accept_rss_auth :index, :show
 
-  helper :messages
-  include MessagesHelper
   helper :sort
   include SortHelper
   helper :watchers
-  include WatchersHelper
- 
+
   def index
     @boards = @project.boards
     # show the board if there is only one
@@ -35,49 +34,70 @@ class BoardsController < ApplicationController
   end
 
   def show
-    sort_init "#{Message.table_name}.updated_on", "desc"
-    sort_update	
-      
-    @topic_count = @board.topics.count
-    @topic_pages = Paginator.new self, @topic_count, per_page_option, params['page']
-    @topics =  @board.topics.find :all, :order => "#{Message.table_name}.sticky DESC, #{sort_clause}",
-                                  :include => [:author, {:last_reply => :author}],
-                                  :limit  =>  @topic_pages.items_per_page,
-                                  :offset =>  @topic_pages.current.offset
-    render :action => 'show', :layout => !request.xhr?
+    respond_to do |format|
+      format.html {
+        sort_init 'updated_on', 'desc'
+        sort_update	'created_on' => "#{Message.table_name}.created_on",
+                    'replies' => "#{Message.table_name}.replies_count",
+                    'updated_on' => "#{Message.table_name}.updated_on"
+
+        @topic_count = @board.topics.count
+        @topic_pages = Paginator.new self, @topic_count, per_page_option, params['page']
+        @topics =  @board.topics.reorder("#{Message.table_name}.sticky DESC").order(sort_clause).all(
+                                      :include => [:author, {:last_reply => :author}],
+                                      :limit  =>  @topic_pages.items_per_page,
+                                      :offset =>  @topic_pages.current.offset)
+        @message = Message.new(:board => @board)
+        render :action => 'show', :layout => !request.xhr?
+      }
+      format.atom {
+        @messages = @board.messages.find :all, :order => 'created_on DESC',
+                                               :include => [:author, :board],
+                                               :limit => Setting.feeds_limit.to_i
+        render_feed(@messages, :title => "#{@project}: #{@board}")
+      }
+    end
   end
-  
-  verify :method => :post, :only => [ :destroy ], :redirect_to => { :action => :index }
 
   def new
-    @board = Board.new(params[:board])
-    @board.project = @project
-    if request.post? && @board.save
+    @board = @project.boards.build
+    @board.safe_attributes = params[:board]
+  end
+
+  def create
+    @board = @project.boards.build
+    @board.safe_attributes = params[:board]
+    if @board.save
       flash[:notice] = l(:notice_successful_create)
-      redirect_to :controller => 'projects', :action => 'settings', :id => @project, :tab => 'boards'
+      redirect_to_settings_in_projects
+    else
+      render :action => 'new'
     end
   end
 
   def edit
-    if request.post? && @board.update_attributes(params[:board])
-      case params[:position]
-      when 'highest'; @board.move_to_top
-      when 'higher'; @board.move_higher
-      when 'lower'; @board.move_lower
-      when 'lowest'; @board.move_to_bottom
-      end if params[:position]
-      redirect_to :controller => 'projects', :action => 'settings', :id => @project, :tab => 'boards'
+  end
+
+  def update
+    @board.safe_attributes = params[:board]
+    if @board.save
+      redirect_to_settings_in_projects
+    else
+      render :action => 'edit'
     end
   end
 
   def destroy
     @board.destroy
+    redirect_to_settings_in_projects
+  end
+
+private
+  def redirect_to_settings_in_projects
     redirect_to :controller => 'projects', :action => 'settings', :id => @project, :tab => 'boards'
   end
-  
-private
-  def find_project
-    @project = Project.find(params[:project_id])
+
+  def find_board_if_available
     @board = @project.boards.find(params[:id]) if params[:id]
   rescue ActiveRecord::RecordNotFound
     render_404

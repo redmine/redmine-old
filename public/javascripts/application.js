@@ -1,58 +1,287 @@
-/* redMine - project management software
-   Copyright (C) 2006-2008  Jean-Philippe Lang */
+/* Redmine - project management software
+   Copyright (C) 2006-2012  Jean-Philippe Lang */
 
 function checkAll (id, checked) {
-	var els = Element.descendants(id);
-	for (var i = 0; i < els.length; i++) {
+  var els = Element.descendants(id);
+  for (var i = 0; i < els.length; i++) {
     if (els[i].disabled==false) {
       els[i].checked = checked;
     }
-	}
+  }
+}
+
+function toggleCheckboxesBySelector(selector) {
+  boxes = $$(selector);
+  var all_checked = true;
+  for (i = 0; i < boxes.length; i++) { if (boxes[i].checked == false) { all_checked = false; } }
+  for (i = 0; i < boxes.length; i++) { boxes[i].checked = !all_checked; }
+}
+
+function setCheckboxesBySelector(checked, selector) {
+  var boxes = $$(selector);
+  boxes.each(function(ele) {
+    ele.checked = checked;
+  });
 }
 
 function showAndScrollTo(id, focus) {
-	Element.show(id);
-	if (focus!=null) { Form.Element.focus(focus); }
-	Element.scrollTo(id);
+  Element.show(id);
+  if (focus!=null) { Form.Element.focus(focus); }
+  Element.scrollTo(id);
+}
+
+function toggleRowGroup(el) {
+  var tr = Element.up(el, 'tr');
+  var n = Element.next(tr);
+  tr.toggleClassName('open');
+  while (n != undefined && !n.hasClassName('group')) {
+    Element.toggle(n);
+    n = Element.next(n);
+  }
+}
+
+function collapseAllRowGroups(el) {
+  var tbody = Element.up(el, 'tbody');
+  tbody.childElements('tr').each(function(tr) {
+    if (tr.hasClassName('group')) {
+      tr.removeClassName('open');
+    } else {
+      tr.hide();
+    }
+  })
+}
+
+function expandAllRowGroups(el) {
+  var tbody = Element.up(el, 'tbody');
+  tbody.childElements('tr').each(function(tr) {
+    if (tr.hasClassName('group')) {
+      tr.addClassName('open');
+    } else {
+      tr.show();
+    }
+  })
+}
+
+function toggleAllRowGroups(el) {
+  var tr = Element.up(el, 'tr');
+  if (tr.hasClassName('open')) {
+    collapseAllRowGroups(el);
+  } else {
+    expandAllRowGroups(el);
+  }
+}
+
+function toggleFieldset(el) {
+  var fieldset = Element.up(el, 'fieldset');
+  fieldset.toggleClassName('collapsed');
+  Effect.toggle(fieldset.down('div'), 'slide', {duration:0.2});
+}
+
+function hideFieldset(el) {
+  var fieldset = Element.up(el, 'fieldset');
+  fieldset.toggleClassName('collapsed');
+  fieldset.down('div').hide();
+}
+
+function add_filter() {
+  select = $('add_filter_select');
+  field = select.value
+  Element.show('tr_' +  field);
+  check_box = $('cb_' + field);
+  check_box.checked = true;
+  toggle_filter(field);
+  select.selectedIndex = 0;
+
+  for (i=0; i<select.options.length; i++) {
+    if (select.options[i].value == field) {
+      select.options[i].disabled = true;
+    }
+  }
+}
+
+function toggle_filter(field) {
+  check_box = $('cb_' + field);
+  if (check_box.checked) {
+    Element.show("operators_" + field);
+    Form.Element.enable("operators_" + field);
+    toggle_operator(field);
+  } else {
+    Element.hide("operators_" + field);
+    Form.Element.disable("operators_" + field);
+    enableValues(field, []);
+  }
+}
+
+function enableValues(field, indexes) {
+  var f = $$(".values_" + field);
+  for(var i=0;i<f.length;i++) {
+    if (indexes.include(i)) {
+      Form.Element.enable(f[i]);
+      f[i].up('span').show();
+    } else {
+      f[i].value = '';
+      Form.Element.disable(f[i]);
+      f[i].up('span').hide();
+    }
+  }
+  if (indexes.length > 0) {
+    Element.show("div_values_" + field);
+  } else {
+    Element.hide("div_values_" + field);
+  }
+}
+
+function toggle_operator(field) {
+  operator = $("operators_" + field);
+  switch (operator.value) {
+    case "!*":
+    case "*":
+    case "t":
+    case "w":
+    case "o":
+    case "c":
+      enableValues(field, []);
+      break;
+    case "><":
+      enableValues(field, [0,1]);
+      break;
+    case "<t+":
+    case ">t+":
+    case "t+":
+    case ">t-":
+    case "<t-":
+    case "t-":
+      enableValues(field, [2]);
+      break;
+    default:
+      enableValues(field, [0]);
+      break;
+  }
+}
+
+function toggle_multi_select(el) {
+  var select = $(el);
+  if (select.multiple == true) {
+    select.multiple = false;
+  } else {
+    select.multiple = true;
+  }
+}
+
+function submit_query_form(id) {
+  selectAllOptions("selected_columns");
+  $(id).submit();
+}
+
+function apply_filters_observer() {
+  $$("#query_form input[type=text]").invoke("observe", "keypress", function(e){
+    if(e.keyCode == Event.KEY_RETURN) {
+      submit_query_form("query_form");
+    }
+  });
 }
 
 var fileFieldCount = 1;
 
 function addFileField() {
-    if (fileFieldCount >= 10) return false
-    fileFieldCount++;
-    var f = document.createElement("input");
-    f.type = "file";
-    f.name = "attachments[" + fileFieldCount + "][file]";
-    f.size = 30;
-    var d = document.createElement("input");
-    d.type = "text";
-    d.name = "attachments[" + fileFieldCount + "][description]";
-    d.size = 60;
-    
-    p = document.getElementById("attachments_fields");
-    p.appendChild(document.createElement("br"));
-    p.appendChild(f);
-    p.appendChild(d);
+  var fields = $('attachments_fields');
+  if (fields.childElements().length >= 10) return false;
+  fileFieldCount++;
+  var s = new Element('span');
+  s.update(fields.down('span').innerHTML);
+  s.down('input.file').name = "attachments[" + fileFieldCount + "][file]";
+  s.down('input.description').name = "attachments[" + fileFieldCount + "][description]";
+  fields.appendChild(s);
+}
+
+function removeFileField(el) {
+  var fields = $('attachments_fields');
+  var s = Element.up(el, 'span');
+  if (fields.childElements().length > 1) {
+    s.remove();
+  } else {
+    s.update(s.innerHTML);
+  }
+}
+
+function checkFileSize(el, maxSize, message) {
+  var files = el.files;
+  if (files) {
+    for (var i=0; i<files.length; i++) {
+      if (files[i].size > maxSize) {
+        alert(message);
+        el.value = "";
+      }
+    }
+  }
 }
 
 function showTab(name) {
-    var f = $$('div#content .tab-content');
-	for(var i=0; i<f.length; i++){
-		Element.hide(f[i]);
-	}
-    var f = $$('div.tabs a');
-	for(var i=0; i<f.length; i++){
-		Element.removeClassName(f[i], "selected");
-	}
-	Element.show('tab-content-' + name);
-	Element.addClassName('tab-' + name, "selected");
-	return false;
+  var f = $$('div#content .tab-content');
+  for(var i=0; i<f.length; i++){
+    Element.hide(f[i]);
+  }
+  var f = $$('div.tabs a');
+  for(var i=0; i<f.length; i++){
+    Element.removeClassName(f[i], "selected");
+  }
+  Element.show('tab-content-' + name);
+  Element.addClassName('tab-' + name, "selected");
+  return false;
+}
+
+function moveTabRight(el) {
+  var lis = Element.up(el, 'div.tabs').down('ul').childElements();
+  var tabsWidth = 0;
+  var i;
+  for (i=0; i<lis.length; i++) {
+    if (lis[i].visible()) {
+      tabsWidth += lis[i].getWidth() + 6;
+    }
+  }
+  if (tabsWidth < Element.up(el, 'div.tabs').getWidth() - 60) {
+    return;
+  }
+  i=0;
+  while (i<lis.length && !lis[i].visible()) {
+    i++;
+  }
+  lis[i].hide();
+}
+
+function moveTabLeft(el) {
+  var lis = Element.up(el, 'div.tabs').down('ul').childElements();
+  var i = 0;
+  while (i<lis.length && !lis[i].visible()) {
+    i++;
+  }
+  if (i>0) {
+    lis[i-1].show();
+  }
+}
+
+function displayTabsButtons() {
+  var lis;
+  var tabsWidth = 0;
+  var i;
+  $$('div.tabs').each(function(el) {
+    lis = el.down('ul').childElements();
+    for (i=0; i<lis.length; i++) {
+      if (lis[i].visible()) {
+        tabsWidth += lis[i].getWidth() + 6;
+      }
+    }
+    if ((tabsWidth < el.getWidth() - 60) && (lis[0].visible())) {
+      el.down('div.tabs-buttons').hide();
+    } else {
+      el.down('div.tabs-buttons').show();
+    }
+  });
 }
 
 function setPredecessorFieldsVisibility() {
     relationType = $('relation_relation_type');
-    if (relationType && relationType.value == "precedes") {
+    if (relationType && (relationType.value == "precedes" || relationType.value == "follows")) {
         Element.show('predecessor_fields');
     } else {
         Element.hide('predecessor_fields');
@@ -67,20 +296,61 @@ function promptToRemote(text, param, url) {
     }
 }
 
+function showModal(id, width) {
+  el = $(id);
+  if (el == undefined || el.visible()) {return;}
+  var h = $$('body')[0].getHeight();
+  var d = document.createElement("div");
+  d.id = 'modalbg';
+  $('main').appendChild(d);
+  $('modalbg').setStyle({ width: '100%', height: h + 'px' });
+  $('modalbg').show();
+
+  var pageWidth = document.viewport.getWidth();
+  if (width) {
+    el.setStyle({'width': width});
+  }
+  el.setStyle({'left': (((pageWidth - el.getWidth())/2  *100) / pageWidth) + '%'});
+  el.addClassName('modal');
+  el.show();
+
+  if (el.down("input[type=text]")) {
+    el.down("input[type=text]").focus();
+  } else if (el.down("input[type=submit]")) {
+    el.down("input[type=submit]").focus();
+	} 
+}
+
+function hideModal(el) {
+  var modal;
+	if (el) {
+		modal = Element.up(el, 'div.modal');
+	} else {
+		modal = $('ajax-modal');
+	}
+  if (modal) {
+    modal.hide();
+  }
+  var bg = $('modalbg');
+  if (bg) {
+    bg.remove();
+  }
+}
+
 function collapseScmEntry(id) {
-    var els = document.getElementsByClassName(id, 'browser');
-	for (var i = 0; i < els.length; i++) {
-	   if (els[i].hasClassName('open')) {
-	       collapseScmEntry(els[i].id);
-	   }
-       Element.hide(els[i]);
-    }
-    $(id).removeClassName('open');
+  var els = document.getElementsByClassName(id, 'browser');
+  for (var i = 0; i < els.length; i++) {
+     if (els[i].hasClassName('open')) {
+         collapseScmEntry(els[i].id);
+     }
+     Element.hide(els[i]);
+  }
+  $(id).removeClassName('open');
 }
 
 function expandScmEntry(id) {
     var els = document.getElementsByClassName(id, 'browser');
-	for (var i = 0; i < els.length; i++) {
+    for (var i = 0; i < els.length; i++) {
        Element.show(els[i]);
        if (els[i].hasClassName('loaded') && !els[i].hasClassName('collapsed')) {
             expandScmEntry(els[i].id);
@@ -114,18 +384,126 @@ function scmEntryLoaded(id) {
 }
 
 function randomKey(size) {
-	var chars = new Array('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z');
-	var key = '';
-	for (i = 0; i < size; i++) {
-  	key += chars[Math.floor(Math.random() * chars.length)];
-	}
-	return key;
+  var chars = new Array('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z');
+  var key = '';
+  for (i = 0; i < size; i++) {
+    key += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return key;
 }
 
-/* shows and hides ajax indicator */
+function observeParentIssueField(url) {
+  new Ajax.Autocompleter('issue_parent_issue_id',
+                         'parent_issue_candidates',
+                         url,
+                         { minChars: 3,
+                           frequency: 0.5,
+                           paramName: 'q',
+                           method: 'get',
+                           updateElement: function(value) {
+                             document.getElementById('issue_parent_issue_id').value = value.id;
+                           }});
+}
+
+function observeRelatedIssueField(url) {
+  new Ajax.Autocompleter('relation_issue_to_id',
+                         'related_issue_candidates',
+                         url,
+                         { minChars: 3,
+                           frequency: 0.5,
+                           paramName: 'q',
+                           method: 'get',
+                           updateElement: function(value) {
+                             document.getElementById('relation_issue_to_id').value = value.id;
+                           },
+                           parameters: 'scope=all'
+                           });
+}
+
+function setVisible(id, visible) {
+  var el = $(id);
+  if (el) {if (visible) {el.show();} else {el.hide();}}
+}
+
+function observeProjectModules() {
+  var f = function() {
+    /* Hides trackers and issues custom fields on the new project form when issue_tracking module is disabled */
+    var c = ($('project_enabled_module_names_issue_tracking').checked == true);
+    setVisible('project_trackers', c);
+    setVisible('project_issue_custom_fields', c);
+  };
+
+  Event.observe(window, 'load', f);
+  Event.observe('project_enabled_module_names_issue_tracking', 'change', f);
+}
+
+/*
+ * Class used to warn user when leaving a page with unsaved textarea
+ * Author: mathias.fischer@berlinonline.de
+*/
+
+var WarnLeavingUnsaved = Class.create({
+  observedForms: false,
+  observedElements: false,
+  changedForms: false,
+  message: null,
+
+  initialize: function(message){
+    this.observedForms = $$('form');
+    this.observedElements =  $$('textarea');
+    this.message = message;
+
+    this.observedElements.each(this.observeChange.bind(this));
+    this.observedForms.each(this.submitAction.bind(this));
+
+    window.onbeforeunload = this.unload.bind(this);
+  },
+
+  unload: function(){
+    this.observedElements.each(function(el) {el.blur();})
+    if(this.changedForms)
+      return this.message;
+  },
+
+  setChanged: function(){
+    this.changedForms = true;
+  },
+
+  setUnchanged: function(){
+    this.changedForms = false;
+  },
+
+  observeChange: function(element){
+    element.observe('change',this.setChanged.bindAsEventListener(this));
+  },
+
+  submitAction: function(element){
+    element.observe('submit',this.setUnchanged.bindAsEventListener(this));
+  }
+});
+
+/*
+ * 1 - registers a callback which copies the csrf token into the
+ * X-CSRF-Token header with each ajax request.  Necessary to
+ * work with rails applications which have fixed
+ * CVE-2011-0447
+ * 2 - shows and hides ajax indicator
+ */
 Ajax.Responders.register({
-    onCreate: function(){
-        if ($('ajax-indicator') && Ajax.activeRequestCount > 0) {
+    onCreate: function(request){
+        var csrf_meta_tag = $$('meta[name=csrf-token]')[0];
+
+        if (csrf_meta_tag) {
+            var header = 'X-CSRF-Token',
+                token = csrf_meta_tag.readAttribute('content');
+
+            if (!request.options.requestHeaders) {
+              request.options.requestHeaders = {};
+            }
+            request.options.requestHeaders[header] = token;
+          }
+
+        if ($('ajax-indicator') && Ajax.activeRequestCount > 0 && $$('input.ajax-loading').size() == 0) {
             Element.show('ajax-indicator');
         }
     },
@@ -135,3 +513,26 @@ Ajax.Responders.register({
         }
     }
 });
+
+function hideOnLoad() {
+  $$('.hol').each(function(el) {
+    el.hide();
+  });
+}
+
+function addFormObserversForDoubleSubmit() {
+  $$('form[method=post]').each(function(form) {
+    if (!form.hasClassName('multiple-submit')) {
+      form.on('submit', function(form_submission) { 
+        if (form.getStorage().get('submitted')) {
+          form_submission.stop();
+        } else {
+          form.getStorage().set('submitted', true);
+        }
+      });
+    }
+  });
+}
+
+Event.observe(window, 'load', hideOnLoad);
+Event.observe(window, 'load', addFormObserversForDoubleSubmit);

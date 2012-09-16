@@ -1,16 +1,16 @@
-# redMine - project management software
-# Copyright (C) 2006-2007  Jean-Philippe Lang
+# Redmine - project management software
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -18,75 +18,139 @@
 require 'redmine/scm/adapters/mercurial_adapter'
 
 class Repository::Mercurial < Repository
-  attr_protected :root_url
+  # sort changesets by revision number
+  has_many :changesets,
+           :order       => "#{Changeset.table_name}.id DESC",
+           :foreign_key => 'repository_id'
+
+  attr_protected        :root_url
   validates_presence_of :url
 
-  def scm_adapter
+  # number of changesets to fetch at once
+  FETCH_AT_ONCE = 100
+
+  def self.human_attribute_name(attribute_key_name, *args)
+    attr_name = attribute_key_name.to_s
+    if attr_name == "url"
+      attr_name = "path_to_repository"
+    end
+    super(attr_name, *args)
+  end
+
+  def self.scm_adapter_class
     Redmine::Scm::Adapters::MercurialAdapter
   end
-  
+
   def self.scm_name
     'Mercurial'
   end
-  
-  def entries(path=nil, identifier=nil)
-    entries=scm.entries(path, identifier)
-    if entries
-      entries.each do |entry|
-        next unless entry.is_file?
-        # Set the filesize unless browsing a specific revision
-        if identifier.nil?
-          full_path = File.join(root_url, entry.path)
-          entry.size = File.stat(full_path).size if File.file?(full_path)
-        end
-        # Search the DB for the entry's last change
-        change = changes.find(:first, :conditions => ["path = ?", scm.with_leading_slash(entry.path)], :order => "#{Changeset.table_name}.committed_on DESC")
-        if change
-          entry.lastrev.identifier = change.changeset.revision
-          entry.lastrev.name = change.changeset.revision
-          entry.lastrev.author = change.changeset.committer
-          entry.lastrev.revision = change.revision
-        end
-      end
-    end
-    entries
+
+  def supports_directory_revisions?
+    true
   end
 
+  def supports_revision_graph?
+    true
+  end
+
+  def repo_log_encoding
+    'UTF-8'
+  end
+
+  # Returns the readable identifier for the given mercurial changeset
+  def self.format_changeset_identifier(changeset)
+    "#{changeset.revision}:#{changeset.scmid}"
+  end
+
+  # Returns the identifier for the given Mercurial changeset
+  def self.changeset_identifier(changeset)
+    changeset.scmid
+  end
+
+  def diff_format_revisions(cs, cs_to, sep=':')
+    super(cs, cs_to, ' ')
+  end
+
+  # Finds and returns a revision with a number or the beginning of a hash
+  def find_changeset_by_name(name)
+    return nil if name.blank?
+    s = name.to_s
+    if /[^\d]/ =~ s or s.size > 8
+      e = changesets.find(:first, :conditions => ['scmid = ?', s])
+    else
+      e = changesets.find(:first, :conditions => ['revision = ?', s])
+    end
+    return e if e
+    changesets.find(:first, :conditions => ['scmid LIKE ?', "#{s}%"])  # last ditch
+  end
+
+  # Returns the latest changesets for +path+; sorted by revision number
+  #
+  # Because :order => 'id DESC' is defined at 'has_many',
+  # there is no need to set 'order'.
+  # But, MySQL test fails.
+  # Sqlite3 and PostgreSQL pass.
+  # Is this MySQL bug?
+  def latest_changesets(path, rev, limit=10)
+    changesets.find(:all,
+                    :include    => :user,
+                    :conditions => latest_changesets_cond(path, rev, limit),
+                    :limit      => limit,
+                    :order      => "#{Changeset.table_name}.id DESC")
+  end
+
+  def latest_changesets_cond(path, rev, limit)
+    cond, args = [], []
+    if scm.branchmap.member? rev
+      # Mercurial named branch is *stable* in each revision.
+      # So, named branch can be stored in database.
+      # Mercurial provides *bookmark* which is equivalent with git branch.
+      # But, bookmark is not implemented.
+      cond << "#{Changeset.table_name}.scmid IN (?)"
+      # Revisions in root directory and sub directory are not equal.
+      # So, in order to get correct limit, we need to get all revisions.
+      # But, it is very heavy.
+      # Mercurial does not treat direcotry.
+      # So, "hg log DIR" is very heavy.
+      branch_limit = path.blank? ? limit : ( limit * 5 )
+      args << scm.nodes_in_branch(rev, :limit => branch_limit)
+    elsif last = rev ? find_changeset_by_name(scm.tagmap[rev] || rev) : nil
+      cond << "#{Changeset.table_name}.id <= ?"
+      args << last.id
+    end
+    unless path.blank?
+      cond << "EXISTS (SELECT * FROM #{Change.table_name}
+                 WHERE #{Change.table_name}.changeset_id = #{Changeset.table_name}.id
+                 AND (#{Change.table_name}.path = ?
+                       OR #{Change.table_name}.path LIKE ? ESCAPE ?))"
+      args << path.with_leading_slash
+      args << "#{path.with_leading_slash.gsub(%r{[%_\\]}) { |s| "\\#{s}" }}/%" << '\\'
+    end
+    [cond.join(' AND '), *args] unless cond.empty?
+  end
+  private :latest_changesets_cond
+
   def fetch_changesets
-    scm_info = scm.info
-    if scm_info
-      # latest revision found in database
-      db_revision = latest_changeset ? latest_changeset.revision.to_i : -1
-      # latest revision in the repository
-      latest_revision = scm_info.lastrev
-      return if latest_revision.nil?
-      scm_revision = latest_revision.identifier.to_i
-      if db_revision < scm_revision
-        logger.debug "Fetching changesets for repository #{url}" if logger && logger.debug?
-        identifier_from = db_revision + 1
-        while (identifier_from <= scm_revision)
-          # loads changesets by batches of 100
-          identifier_to = [identifier_from + 99, scm_revision].min
-          revisions = scm.revisions('', identifier_from, identifier_to, :with_paths => true)
-          transaction do
-            revisions.each do |revision|
-              changeset = Changeset.create(:repository => self,
-                                           :revision => revision.identifier,
-                                           :scmid => revision.scmid,
-                                           :committer => revision.author, 
-                                           :committed_on => revision.time,
-                                           :comments => revision.message)
-              
-              revision.paths.each do |change|
-                Change.create(:changeset => changeset,
-                              :action => change[:action],
-                              :path => change[:path],
-                              :from_path => change[:from_path],
-                              :from_revision => change[:from_revision])
-              end
-            end
-          end unless revisions.nil?
-          identifier_from = identifier_to + 1
+    return if scm.info.nil?
+    scm_rev = scm.info.lastrev.revision.to_i
+    db_rev  = latest_changeset ? latest_changeset.revision.to_i : -1
+    return unless db_rev < scm_rev  # already up-to-date
+
+    logger.debug "Fetching changesets for repository #{url}" if logger
+    (db_rev + 1).step(scm_rev, FETCH_AT_ONCE) do |i|
+      scm.each_revision('', i, [i + FETCH_AT_ONCE - 1, scm_rev].min) do |re|
+        transaction do
+          parents = (re.parents || []).collect{|rp| find_changeset_by_name(rp)}.compact
+          cs = Changeset.create(:repository   => self,
+                                :revision     => re.revision,
+                                :scmid        => re.scmid,
+                                :committer    => re.author,
+                                :committed_on => re.time,
+                                :comments     => re.message,
+                                :parents      => parents)
+          unless cs.new_record?
+            re.paths.each { |e| cs.create_change(e) }
+          end
         end
       end
     end

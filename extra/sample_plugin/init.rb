@@ -1,14 +1,11 @@
-# Redmine sample plugin
-require 'redmine'
-
-RAILS_DEFAULT_LOGGER.info 'Starting Example plugin for RedMine'
+Rails.logger.info 'Starting Example plugin for RedMine'
 
 Redmine::Plugin.register :sample_plugin do
   name 'Example plugin'
   author 'Author name'
   description 'This is a sample plugin for Redmine'
   version '0.0.1'
-  settings :default => {'sample_setting' => 'value', 'foo'=>'bar'}, :partial => 'settings/settings'
+  settings :default => {'sample_setting' => 'value', 'foo'=>'bar'}, :partial => 'settings/sample_plugin_settings'
 
   # This plugin adds a project module
   # It can be enabled/disabled at project level (Project settings -> Modules)
@@ -24,7 +21,7 @@ Redmine::Plugin.register :sample_plugin do
 
   # A new item is added to the project menu
   menu :project_menu, :sample_plugin, { :controller => 'example', :action => 'say_hello' }, :caption => 'Sample'
-  
+
   # Meetings are added to the activity view
   activity_provider :meetings
 end
