@@ -81,7 +81,8 @@ module Redmine
       def load_from_yaml(filename, env)
         yaml = nil
         begin
-          yaml = YAML::load_file(filename)
+          body = File.read(filename)
+          yaml = YAML::load(Erubis::Eruby.new(body).evaluate)
         rescue ArgumentError
           $stderr.puts "Your Redmine configuration file located at #{filename} is not a valid YAML file and could not be loaded."
           exit 1
