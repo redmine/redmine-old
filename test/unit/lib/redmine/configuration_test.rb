@@ -41,6 +41,12 @@ class Redmine::ConfigurationTest < ActiveSupport::TestCase
     assert_equal 'bar', @conf['somesetting']
   end
 
+  def test_use_erb
+    ENV['somesetting'] = 'foobar'
+    load_conf('erb.yml', 'test')
+    assert_equal ENV['somesetting'], @conf['somesetting']
+  end
+
   def test_with
     load_conf('default.yml', 'test')
     assert_equal 'foo', @conf['somesetting']
