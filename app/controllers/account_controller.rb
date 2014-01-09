@@ -55,6 +55,7 @@ class AccountController < ApplicationController
         return
       end
       if request.post?
+        puts 'something'
         @user.password, @user.password_confirmation = params[:new_password], params[:new_password_confirmation]
         if @user.save
           @token.destroy
@@ -64,6 +65,10 @@ class AccountController < ApplicationController
         end
       end
       render :template => "account/password_recovery"
+      if ENV['whatever']
+        puts 'whatever'
+        test=12345
+      end
       return
     else
       if request.post?
